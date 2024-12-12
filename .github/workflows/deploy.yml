@@ -1,0 +1,90 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  DOCKER_REGISTRY: ghcr.io/${{ github.repository_owner }}
+  K8S_NAMESPACE: pg-es-sync
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install pytest
+
+    - name: Run tests
+      run: |
+        pytest
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v2
+
+    - name: Login to GitHub Container Registry
+      uses: docker/login-action@v2
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v4
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ env.DOCKER_REGISTRY }}/pg-es-sync:${{ github.sha }}
+          ${{ env.DOCKER_REGISTRY }}/pg-es-sync:latest
+
+    - name: Install kubectl
+      uses: azure/setup-kubectl@v3
+      with:
+        version: 'latest'
+
+    - name: Configure kubectl
+      uses: azure/k8s-set-context@v3
+      with:
+        method: kubeconfig
+        kubeconfig: ${{ secrets.KUBE_CONFIG }}
+
+    - name: Deploy to Kubernetes
+      run: |
+        # Create namespace if it doesn't exist
+        kubectl apply -f k8s/namespace.yaml
+        
+        # Update image tags in deployments
+        sed -i "s|\${DOCKER_REGISTRY}|$DOCKER_REGISTRY|g" k8s/deployment.yaml
+        sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" k8s/deployment.yaml
+        sed -i "s|\${DOCKER_REGISTRY}|$DOCKER_REGISTRY|g" k8s/api-deployment.yaml
+        sed -i "s|\${IMAGE_TAG}|${{ github.sha }}|g" k8s/api-deployment.yaml
+        
+        # Apply Kubernetes manifests
+        kubectl apply -f k8s/configmap.yaml
+        kubectl apply -f k8s/secret.yaml
+        kubectl apply -f k8s/deployment.yaml
+        kubectl apply -f k8s/api-deployment.yaml
+        kubectl apply -f k8s/api-service.yaml
+        kubectl apply -f k8s/ingress.yaml
+
+    - name: Verify deployments
+      run: |
+        kubectl rollout status deployment/pg-es-sync -n $K8S_NAMESPACE
+        kubectl rollout status deployment/pg-es-api -n $K8S_NAMESPACE

@@ -1,0 +1,19 @@
+sync_config:
+  # List of tables to sync
+  tables:
+    - name: "your_table_name"  # Replace with actual table name
+      index_name: "your_es_index"  # Replace with desired ES index name
+      timestamp_column: "updated_at"  # Column used to track updates
+      primary_key: "id"  # Primary key column
+    # Add more tables as needed:
+    # - name: "another_table"
+    #   index_name: "another_index"
+    #   timestamp_column: "modified_at"
+    #   primary_key: "id"
+
+  # Sync settings
+  sync_interval: 10  # Sync interval in seconds
+  min_batch_size: 100  # Minimum batch size
+  max_batch_size: 5000  # Maximum batch size
+  rate_limit: 1000  # Maximum records per minute
+  pool_size: 5  # Database connection pool size

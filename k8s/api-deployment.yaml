@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pg-es-api
+  namespace: pg-es-sync
+  labels:
+    app: pg-es-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: pg-es-api
+  template:
+    metadata:
+      labels:
+        app: pg-es-api
+    spec:
+      containers:
+      - name: pg-es-api
+        image: ${DOCKER_REGISTRY}/pg-es-sync:${IMAGE_TAG}
+        env:
+        - name: SERVICE_TYPE
+          value: "api"
+        ports:
+        - containerPort: 8000
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        envFrom:
+        - secretRef:
+            name: pg-es-sync-secrets
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20

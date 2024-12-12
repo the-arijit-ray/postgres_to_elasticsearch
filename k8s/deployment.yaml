@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pg-es-sync
+  labels:
+    app: pg-es-sync
+spec:
+  replicas: 1  # Only one replica as we don't want duplicate syncs
+  selector:
+    matchLabels:
+      app: pg-es-sync
+  template:
+    metadata:
+      labels:
+        app: pg-es-sync
+    spec:
+      containers:
+      - name: pg-es-sync
+        image: ${DOCKER_REGISTRY}/pg-es-sync:${IMAGE_TAG}
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "200m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        envFrom:
+        - secretRef:
+            name: pg-es-sync-secrets
+        volumeMounts:
+        - name: config-volume
+          mountPath: /app/config.yaml
+          subPath: config.yaml
+      volumes:
+      - name: config-volume
+        configMap:
+          name: pg-es-sync-config
